@@ -1,0 +1,52 @@
+﻿@page "/"
+@using barberiaApp.Services
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+
+<PageTitle>Barbería - Bienvenido</PageTitle>
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 text-center">
+            <h1 class="display-4 mb-4">Bienvenido a Barbería App</h1>
+            <p class="lead mb-5">Sistema de gestión de citas para barberías</p>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <div class="card h-100 shadow">
+                        <div class="card-body">
+                            <h3 class="card-title">Clientes</h3>
+                            <p class="card-text">Agenda tus citas de forma fácil y rápida</p>
+                            <a href="/registro" class="btn btn-primary">Registrarse</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <div class="card h-100 shadow">
+                        <div class="card-body">
+                            <h3 class="card-title">Barberos</h3>
+                            <p class="card-text">Gestiona y administra todas las citas</p>
+                            <a href="/login" class="btn btn-success">Iniciar Sesión</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4">
+                <p>¿Ya tienes cuenta? <a href="/login" class="btn btn-link">Inicia sesión aquí</a></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        // Si ya está autenticado, redirigir automáticamente
+        var isAuth = await AuthService.IsAuthenticatedAsync();
+        if (isAuth)
+        {
+            Navigation.NavigateTo("/mis-citas");
+        }
+    }
+}

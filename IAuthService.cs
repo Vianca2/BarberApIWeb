@@ -1,11 +1,13 @@
-﻿using BarberappAPI.DTOs;
+﻿using barberiaApp.Models;
 
-namespace BarberappAPI.Services
+namespace barberiaApp.Services
 {
     public interface IAuthService
     {
-        Task<(bool Success, string Message, UsuarioDto? Usuario)> RegistrarUsuarioAsync(RegistroUsuarioDto registroDto);
-        Task<(bool Success, string Message, UsuarioDto? Usuario, string? Token)> LoginAsync(LoginDto loginDto);
-        string GenerarToken(UsuarioDto usuario);
+        Task<LoginResponse?> LoginAsync(LoginDto loginDto);
+        Task<bool> RegistroAsync(RegistroUsuarioDto registroDto);
+        Task LogoutAsync();
+        Task<bool> IsAuthenticatedAsync();
+        Task<string?> GetTokenAsync();
     }
 }

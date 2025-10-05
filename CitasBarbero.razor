@@ -1,0 +1,345 @@
+﻿@page "/citas-barbero"
+@using barberiaApp.Models
+@using barberiaApp.Services
+@using Microsoft.JSInterop
+@inject ICitaService CitaService
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Gestión de Citas - Barbería</PageTitle>
+
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h2>Gestión de Citas</h2>
+        </div>
+        <div class="col text-end">
+            <button class="btn btn-primary" @onclick="CargarCitas">
+                <i class="bi bi-arrow-clockwise"></i> Actualizar
+            </button>
+            <button class="btn btn-danger ms-2" @onclick="CerrarSesion">
+                Cerrar Sesión
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(mensaje))
+    {
+        <div class="alert @(mensajeExito ? "alert-success" : "alert-danger") alert-dismissible fade show" role="alert">
+            @mensaje
+            <button type="button" class="btn-close" @onclick="() => mensaje = string.Empty"></button>
+        </div>
+    }
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <label class="form-label">Filtrar por Estado:</label>
+                    <select class="form-select" @bind="filtroEstado" @bind:after="FiltrarCitas">
+                        <option value="">Todos</option>
+                        <option value="PENDIENTE">Pendientes</option>
+                        <option value="CONFIRMADA">Confirmadas</option>
+                        <option value="RECHAZADA">Rechazadas</option>
+                        <option value="COMPLETADA">Completadas</option>
+                        <option value="CANCELADA">Canceladas</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (citas == null)
+    {
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Cargando...</span>
+            </div>
+        </div>
+    }
+    else if (!citasFiltradas.Any())
+    {
+        <div class="alert alert-info">
+            No hay citas para mostrar.
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Cliente</th>
+                        <th>Contacto</th>
+                        <th>Fecha/Hora</th>
+                        <th>Tipo de Corte</th>
+                        <th>Descripción</th>
+                        <th>Estado</th>
+                        <th>Código</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var cita in citasFiltradas.OrderBy(c => c.FechaHora))
+                    {
+                        <tr>
+                            <td>@cita.NombreCliente</td>
+                            <td>
+                                <small>
+                                    @cita.EmailCliente<br />
+                                    @cita.TelefonoCliente
+                                </small>
+                            </td>
+                            <td>@cita.FechaHora.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>@cita.TipoCorte</td>
+                            <td>
+                                <small>@(string.IsNullOrEmpty(cita.Descripcion) ? "-" : cita.Descripcion)</small>
+                            </td>
+                            <td>
+                                <span class="badge @GetEstadoBadge(cita.Estado)">@cita.Estado</span>
+                            </td>
+                            <td>
+                                @if (!string.IsNullOrEmpty(cita.CodigoConfirmacion))
+                                {
+                                    <span class="badge bg-info">@cita.CodigoConfirmacion</span>
+                                }
+                                else
+                                {
+                                    <span>-</span>
+                                }
+                            </td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    @if (cita.Estado == "PENDIENTE")
+                                    {
+                                        <button class="btn btn-sm btn-success" @onclick="() => AbrirModalConfirmar(cita)" title="Confirmar">
+                                            ✓
+                                        </button>
+                                        <button class="btn btn-sm btn-danger" @onclick="() => RechazarCita(cita.Id)" title="Rechazar">
+                                            ✗
+                                        </button>
+                                    }
+                                    @if (cita.Estado == "CONFIRMADA")
+                                    {
+                                        <button class="btn btn-sm btn-info" @onclick="() => CompletarCita(cita.Id)" title="Completar">
+                                            ✓✓
+                                        </button>
+                                    }
+                                    <button class="btn btn-sm btn-danger" @onclick="() => EliminarCita(cita.Id)" title="Eliminar">
+                                        🗑
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<!-- Modal para confirmar cita -->
+@if (mostrarModalConfirmar)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title">Confirmar Cita</h5>
+                    <button type="button" class="btn-close" @onclick="CerrarModal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>¿Deseas confirmar la cita de <strong>@citaSeleccionada?.NombreCliente</strong>?</p>
+                    <div class="mb-3">
+                        <label class="form-label">Código de Confirmación (Opcional):</label>
+                        <input type="text" class="form-control" @bind="codigoConfirmacion" placeholder="Ej: 123456" maxlength="10" />
+                        <small class="text-muted">Si no ingresas un código, se generará automáticamente</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CerrarModal">Cancelar</button>
+                    <button type="button" class="btn btn-success" @onclick="ConfirmarCita" disabled="@isLoading">
+                        @if (isLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        Confirmar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<CitaDto>? citas;
+    private List<CitaDto> citasFiltradas = new();
+    private string filtroEstado = string.Empty;
+    private bool isLoading = false;
+    private string mensaje = string.Empty;
+    private bool mensajeExito = false;
+    private bool mostrarModalConfirmar = false;
+    private CitaDto? citaSeleccionada;
+    private string codigoConfirmacion = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var isAuth = await AuthService.IsAuthenticatedAsync();
+        if (!isAuth)
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        await CargarCitas();
+    }
+
+    private async Task CargarCitas()
+    {
+        citas = await CitaService.ObtenerTodasLasCitasAsync();
+        FiltrarCitas();
+    }
+
+    private void FiltrarCitas()
+    {
+        if (citas == null) return;
+
+        citasFiltradas = string.IsNullOrEmpty(filtroEstado)
+            ? citas.ToList()
+            : citas.Where(c => c.Estado == filtroEstado).ToList();
+    }
+
+    private void AbrirModalConfirmar(CitaDto cita)
+    {
+        citaSeleccionada = cita;
+        codigoConfirmacion = string.Empty;
+        mostrarModalConfirmar = true;
+    }
+
+    private void CerrarModal()
+    {
+        mostrarModalConfirmar = false;
+        citaSeleccionada = null;
+        codigoConfirmacion = string.Empty;
+    }
+
+    private async Task ConfirmarCita()
+    {
+        if (citaSeleccionada == null) return;
+
+        isLoading = true;
+        try
+        {
+            var dto = new ActualizarEstadoCitaDto
+            {
+                Estado = "CONFIRMADA",
+                CodigoConfirmacion = string.IsNullOrEmpty(codigoConfirmacion) ? null : codigoConfirmacion
+            };
+
+            var success = await CitaService.ActualizarEstadoAsync(citaSeleccionada.Id, dto);
+
+            if (success)
+            {
+                mensaje = "Cita confirmada exitosamente";
+                mensajeExito = true;
+                await CargarCitas();
+                CerrarModal();
+            }
+            else
+            {
+                mensaje = "Error al confirmar la cita";
+                mensajeExito = false;
+            }
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task RechazarCita(long citaId)
+    {
+        var dto = new ActualizarEstadoCitaDto { Estado = "RECHAZADA" };
+        await ActualizarEstado(citaId, dto, "Cita rechazada");
+    }
+
+    private async Task CompletarCita(long citaId)
+    {
+        var dto = new ActualizarEstadoCitaDto { Estado = "COMPLETADA" };
+        await ActualizarEstado(citaId, dto, "Cita completada");
+    }
+
+    private async Task ActualizarEstado(long citaId, ActualizarEstadoCitaDto dto, string mensajeExito)
+    {
+        isLoading = true;
+        try
+        {
+            var success = await CitaService.ActualizarEstadoAsync(citaId, dto);
+
+            if (success)
+            {
+                mensaje = mensajeExito;
+                this.mensajeExito = true;
+                await CargarCitas();
+            }
+            else
+            {
+                mensaje = "Error al actualizar la cita";
+                this.mensajeExito = false;
+            }
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task EliminarCita(long citaId)
+    {
+        if (!await JSRuntime.InvokeAsync<bool>("confirm", "¿Estás seguro de eliminar esta cita?"))
+            return;
+
+        isLoading = true;
+        try
+        {
+            var success = await CitaService.EliminarCitaAsync(citaId);
+
+            if (success)
+            {
+                mensaje = "Cita eliminada exitosamente";
+                mensajeExito = true;
+                await CargarCitas();
+            }
+            else
+            {
+                mensaje = "Error al eliminar la cita";
+                mensajeExito = false;
+            }
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task CerrarSesion()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("/login");
+    }
+
+    private string GetEstadoBadge(string estado)
+    {
+        return estado switch
+        {
+            "PENDIENTE" => "bg-warning text-dark",
+            "CONFIRMADA" => "bg-success",
+            "RECHAZADA" => "bg-danger",
+            "COMPLETADA" => "bg-info",
+            "CANCELADA" => "bg-secondary",
+            _ => "bg-light text-dark"
+        };
+    }
+}

@@ -1,0 +1,207 @@
+﻿@page "/mis-citas"
+@using Microsoft.AspNetCore.Components.Forms
+@using barberiaApp.Models
+@using barberiaApp.Services
+@inject ICitaService CitaService
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+
+<PageTitle>Mis Citas - Barbería</PageTitle>
+
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h2>Mis Citas</h2>
+        </div>
+        <div class="col text-end">
+            <button class="btn btn-primary" @onclick="MostrarFormularioNuevaCita">
+                <i class="bi bi-plus-circle"></i> Nueva Cita
+            </button>
+            <button class="btn btn-danger ms-2" @onclick="CerrarSesion">
+                Cerrar Sesión
+            </button>
+        </div>
+    </div>
+
+    @if (mostrarFormulario)
+    {
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Agendar Nueva Cita</h5>
+            </div>
+            <div class="card-body">
+                <EditForm Model="@nuevaCita" OnValidSubmit="CrearCita">
+                    @if (!string.IsNullOrEmpty(mensaje))
+                    {
+                        <div class="alert @(mensajeExito ? "alert-success" : "alert-danger")" role="alert">
+                            @mensaje
+                        </div>
+                    }
+
+                    <div class="mb-3">
+                        <label class="form-label">Fecha y Hora</label>
+                        <InputDate @bind-Value="nuevaCita.FechaHora" class="form-control" min="@DateTime.Now.ToString("yyyy-MM-dd")" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Tipo de Corte</label>
+                        <InputSelect @bind-Value="nuevaCita.TipoCorte" class="form-select">
+                            <option value="">Selecciona un tipo</option>
+                            <option value="Corte Clásico">Corte Clásico</option>
+                            <option value="Corte + Barba">Corte + Barba</option>
+                            <option value="Degradado">Degradado</option>
+                            <option value="Barba">Solo Barba</option>
+                            <option value="Afeitado">Afeitado Completo</option>
+                        </InputSelect>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Descripción (Opcional)</label>
+                        <InputTextArea @bind-Value="nuevaCita.Descripcion" class="form-control" rows="3" placeholder="Detalles adicionales..." />
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-success" disabled="@isLoading">
+                            @if (isLoading)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                            }
+                            Agendar Cita
+                        </button>
+                        <button type="button" class="btn btn-secondary" @onclick="() => mostrarFormulario = false">
+                            Cancelar
+                        </button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    }
+
+    @if (citas == null)
+    {
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Cargando...</span>
+            </div>
+        </div>
+    }
+    else if (!citas.Any())
+    {
+        <div class="alert alert-info">
+            No tienes citas agendadas. ¡Agenda tu primera cita!
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            @foreach (var cita in citas.OrderByDescending(c => c.FechaHora))
+            {
+                <div class="col-md-6 mb-3">
+                    <div class="card">
+                        <div class="card-header @GetEstadoClass(cita.Estado)">
+                            <strong>@cita.TipoCorte</strong>
+                            <span class="badge bg-light text-dark float-end">@cita.Estado</span>
+                        </div>
+                        <div class="card-body">
+                            <p><strong>Fecha:</strong> @cita.FechaHora.ToString("dd/MM/yyyy HH:mm")</p>
+                            @if (!string.IsNullOrEmpty(cita.Descripcion))
+                            {
+                                <p><strong>Descripción:</strong> @cita.Descripcion</p>
+                            }
+                            @if (!string.IsNullOrEmpty(cita.CodigoConfirmacion))
+                            {
+                                <p><strong>Código:</strong> <span class="badge bg-primary">@cita.CodigoConfirmacion</span></p>
+                            }
+                            <small class="text-muted">Creada: @cita.CreatedAt.ToString("dd/MM/yyyy")</small>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<CitaDto>? citas;
+    private CrearCitaDto nuevaCita = new() { FechaHora = DateTime.Now.AddDays(1) };
+    private bool mostrarFormulario = false;
+    private bool isLoading = false;
+    private string mensaje = string.Empty;
+    private bool mensajeExito = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var isAuth = await AuthService.IsAuthenticatedAsync();
+        if (!isAuth)
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        await CargarCitas();
+    }
+
+    private async Task CargarCitas()
+    {
+        citas = await CitaService.ObtenerMisCitasAsync();
+    }
+
+    private void MostrarFormularioNuevaCita()
+    {
+        mostrarFormulario = true;
+        nuevaCita = new() { FechaHora = DateTime.Now.AddDays(1) };
+        mensaje = string.Empty;
+    }
+
+    private async Task CrearCita()
+    {
+        isLoading = true;
+        mensaje = string.Empty;
+
+        try
+        {
+            var success = await CitaService.CrearCitaAsync(nuevaCita);
+
+            if (success)
+            {
+                mensaje = "¡Cita agendada exitosamente!";
+                mensajeExito = true;
+                mostrarFormulario = false;
+                await CargarCitas();
+            }
+            else
+            {
+                mensaje = "Error al agendar la cita";
+                mensajeExito = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            mensaje = $"Error: {ex.Message}";
+            mensajeExito = false;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task CerrarSesion()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("/login");
+    }
+
+    private string GetEstadoClass(string estado)
+    {
+        return estado switch
+        {
+            "PENDIENTE" => "bg-warning text-dark",
+            "CONFIRMADA" => "bg-success text-white",
+            "RECHAZADA" => "bg-danger text-white",
+            "COMPLETADA" => "bg-info text-white",
+            "CANCELADA" => "bg-secondary text-white",
+            _ => "bg-light"
+        };
+    }
+}

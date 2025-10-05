@@ -1,0 +1,123 @@
+﻿@page "/registro"
+@using Microsoft.AspNetCore.Components.Forms
+@using barberiaApp.Models
+@using barberiaApp.Services
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+
+<PageTitle>Registro - Barbería</PageTitle>
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-success text-white">
+                    <h3 class="mb-0 text-center">Crear Cuenta</h3>
+                </div>
+                <div class="card-body p-4">
+                    <EditForm Model="registroModel" OnValidSubmit="HandleRegistro">
+                        @if (!string.IsNullOrEmpty(mensaje))
+                        {
+                            <div class="alert @(mensajeExito ? "alert-success" : "alert-danger")">@mensaje</div>
+                        }
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Nombre</label>
+                                <InputText @bind-Value="registroModel.Nombre" class="form-control" />
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Teléfono</label>
+                                <InputText @bind-Value="registroModel.Telefono" class="form-control" />
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Email</label>
+                            <InputText @bind-Value="registroModel.Email" class="form-control" />
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Contraseña</label>
+                                <InputText type="password" @bind-Value="registroModel.Password" class="form-control" />
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Confirmar</label>
+                                <InputText type="password" @bind-Value="confirmPassword" class="form-control" />
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Tipo de Usuario</label>
+                            <div class="form-check">
+                                <input type="radio" name="rol" value="CLIENTE" @onchange="@(() => registroModel.Rol = "CLIENTE")" checked="@(registroModel.Rol == "CLIENTE")" class="form-check-input" id="cliente" />
+                                <label class="form-check-label" for="cliente">Cliente</label>
+                            </div>
+                            <div class="form-check">
+                                <input type="radio" name="rol" value="BARBERO" @onchange="@(() => registroModel.Rol = "BARBERO")" checked="@(registroModel.Rol == "BARBERO")" class="form-check-input" id="barbero" />
+                                <label class="form-check-label" for="barbero">Barbero</label>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-success w-100" disabled="@isLoading">
+                            @(isLoading ? "Registrando..." : "Registrarse")
+                        </button>
+                    </EditForm>
+
+                    <div class="text-center mt-3">
+                        <a href="/login">¿Ya tienes cuenta? Inicia sesión</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private RegistroUsuarioDto registroModel = new() { Rol = "CLIENTE" };
+    private string confirmPassword = string.Empty;
+    private string mensaje = string.Empty;
+    private bool mensajeExito = false;
+    private bool isLoading = false;
+
+    private async Task HandleRegistro()
+    {
+        isLoading = true;
+        mensaje = string.Empty;
+
+        if (registroModel.Password != confirmPassword)
+        {
+            mensaje = "Las contraseñas no coinciden";
+            mensajeExito = false;
+            isLoading = false;
+            return;
+        }
+
+        try
+        {
+            var success = await AuthService.RegistroAsync(registroModel);
+            if (success)
+            {
+                mensaje = "Registro exitoso. Redirigiendo...";
+                mensajeExito = true;
+                await Task.Delay(2000);
+                Navigation.NavigateTo("/login");
+            }
+            else
+            {
+                mensaje = "Error al registrar";
+                mensajeExito = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            mensaje = $"Error: {ex.Message}";
+            mensajeExito = false;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}
